@@ -6,7 +6,7 @@ LPBYTE = POINTER(c_ubyte)
 LPTSTR = POINTER(c_char)
 PVOID = c_void_p
 UINT_PTR = c_ulong
-
+DWORD64 = c_ulonglong
 DEBUG_PROCESS = 0x00000001
 CREATE_NEW_CONSOLE = 0x00000010
 PROCESS_ALL_ACCESS = 0x001F0FFF
@@ -39,6 +39,21 @@ CONTEXT_DEBUG_REGISTERS = 0x00010010
 HW_ACCESS = 0x00000003
 HW_EXECUTE = 0x00000000
 HW_WRITE = 0x00000001
+
+
+class MODULEENTRY32(Structure):
+    _fields_ = [
+        ("dwSize",        DWORD),
+        ("th32ModuleID",  DWORD),
+        ("th32ProcessID", DWORD),
+        ("GlblcntUsage",  DWORD),
+        ("ProccntUsage",  DWORD),
+        ("modBaseAddr",   PVOID),
+        ("modBaseSize",   DWORD),
+        ("hModule",       PVOID),
+        ("szModule",      CHAR * 256),
+        ("szExePath",     CHAR * 260),
+    ]
 
 
 class STARTUPINFO(Structure):
@@ -138,31 +153,48 @@ class FLOATING_SAVE_AREA(Structure):
 
 class CONTEXT(Structure):
     _fields_ = [
-        ("ContextFlags", DWORD),
-        ("Dr0", DWORD),
-        ("Dr1", DWORD),
-        ("Dr2", DWORD),
-        ("Dr3", DWORD),
-        ("Dr6", DWORD),
-        ("Dr7", DWORD),
-        ("FloatSave", FLOATING_SAVE_AREA),
-        ("SegGs", DWORD),
-        ("SegFs", DWORD),
-        ("SegEs", DWORD),
-        ("SegDs", DWORD),
-        ("Edi", DWORD),
-        ("Esi", DWORD),
-        ("Ebx", DWORD),
-        ("Edx", DWORD),
-        ("Ecx", DWORD),
-        ("Eax", DWORD),
-        ("Ebp", DWORD),
-        ("Eip", DWORD),
-        ("SegCs", DWORD),
-        ("EFlags", DWORD),
-        ("Esp", DWORD),
-        ("SegSs", DWORD),
-        ("ExtendedRegisters", BYTE * 512),
+        ('P1Home', DWORD64),
+        ('P2Home', DWORD64),
+        ('P3Home', DWORD64),
+        ('P4Home', DWORD64),
+        ('P5Home', DWORD64),
+        ('P6Home', DWORD64),
+
+        ('ContextFlags', DWORD),
+        ('MxCsr', DWORD),
+
+        ('SegCs',WORD),   
+        ('SegDs',WORD), 
+        ('SegEs',WORD), 
+        ('SegFs',WORD), 
+        ('SegGs',WORD), 
+        ('SegSs',WORD), 
+        ('EFlags',DWORD), 
+
+        ('Dr0', DWORD64),
+        ('Dr1', DWORD64),
+        ('Dr2', DWORD64),
+        ('Dr3', DWORD64),
+        ('Dr6', DWORD64),
+        ('Dr7', DWORD64),
+
+        ('Eax', DWORD64),
+        ('Ecx', DWORD64),
+        ('Edx', DWORD64),
+        ('Ebx', DWORD64),
+        ('Esp', DWORD64),
+        ('Ebp', DWORD64),
+        ('Esi', DWORD64),
+        ('Edi', DWORD64),
+        ('R8', DWORD64),
+        ('R9', DWORD64),
+        ('R10', DWORD64),
+        ('R11', DWORD64),
+        ('R12', DWORD64),
+        ('R13', DWORD64),
+        ('R14', DWORD64),
+        ('R15', DWORD64),
+        ('Eip', DWORD64),
     ]
 
 
@@ -265,3 +297,5 @@ class WinApi:
         self.ContinueDebugEvent = CDLL("kernel32.dll").ContinueDebugEvent
         self.GetLastError = CDLL("kernel32.dll").GetLastError
         self.SetThreadContext = CDLL("kernel32.dll").SetThreadContext
+        self.Module32First = CDLL("kernel32.dll").Module32First
+        self.Module32Next = CDLL("kernel32.dll").Module32Next

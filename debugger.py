@@ -33,7 +33,7 @@ log = Log()
 
 
 class ReDbg:
-    _pid = None
+    _pid: DWORD = None
     _hproc = None
     _debug = None
     _handlers = dict()
@@ -104,9 +104,9 @@ class ReDbg:
         org_byte = self._read_process_memory(addr, 1)
         res = self._write_process_memory(addr, b"\xCC")
         if res:
+            bp = BreakPoint(addr, org_byte, handler)
+            self._handlers[addr] = bp
             if (self._debug):
-                bp = BreakPoint(addr, org_byte, handler)
-                self._handlers[addr] = bp
                 log.success(f"Set break point success at {hex(addr)}")
 
         else:
@@ -114,9 +114,11 @@ class ReDbg:
                 f"Can't set break point at {hex(addr)}. Error code {hex(api.GetLastError())}")
 
     def debug(self):
-        while True:
-            self._get_debug_event()
-
+        while self._get_debug_event():
+            pass
+        if (self._debug):
+                log.success("Debugger terminated")
+                
     def _open_process(self, pid):
         hproc = api.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
         if (hproc != 0):
@@ -145,9 +147,7 @@ class ReDbg:
         context = CONTEXT()
         context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS
         if (h_thread is not False):
-            if (api.GetThreadContext(h_thread, byref(context))):
-                api.CloseHandle(h_thread)
-            else:
+            if (not api.GetThreadContext(h_thread, byref(context))):
                 log.error("Get thread context fail.")
 
         return context
@@ -159,72 +159,64 @@ class ReDbg:
             if (self._debug):
                 log.success("Event code: %d Thread ID: %d" % (
                     debug_event.dwDebugEventCode, debug_event.dwThreadId))
-
-            if debug_event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT:
-                exception = debug_event.u.Exception.ExceptionRecord.ExceptionCode
-                if (exception == EXCEPTION_BREAKPOINT):
+            if (debug_event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT):
+                return False
+            if (debug_event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT):
+                #exception = debug_event.u.Exception.ExceptionRecord.ExceptionCode
+                exception_address = debug_event.u.Exception.ExceptionRecord.ExceptionAddress
+                bp: BreakPoint = self._handlers.get(
+                    exception_address, None)
+                if (bp is not None):
                     h_thread = self._open_thread(debug_event.dwThreadId)
                     context = self._get_thread_context(h_thread)
-                    exception_address = debug_event.u.Exception.ExceptionRecord.ExceptionAddress
-                    bp: BreakPoint = self._handlers.get(
-                        exception_address, None)
+
                     if (bp.handler is not None):
                         bp.handler(context)
                         self._write_process_memory(
                             bp.address, bp.original_byte)
                         context.Eip = context.Eip - 1
-                        api.SetThreadContext(h_thread, context)
+                        if (not api.SetThreadContext(h_thread, byref(context))):
+                            raise Exception("SetThreadContext Error!")
                     else:
                         log.warning(
                             f"This breakpoint does not have a handler.Address : {hex(exception_address)}")
-
+                    api.CloseHandle(h_thread)
             api.ContinueDebugEvent(
                 debug_event.dwProcessId, debug_event.dwThreadId, continue_status)
+            return True
 
-    def _virtual_protect(self, base_address, size, protection):
-        old_protect = c_ulong(0)
-        api.VirtualProtectEx(self._hproc, base_address,
-                             size, protection, byref(old_protect))
-        return old_protect.value
+    def get_module_addr(self, name: bytes):
+        current_entry = MODULEENTRY32()
+        snapshot = api.CreateToolhelp32Snapshot(
+            DWORD(0x00000008), DWORD(self._pid))
+
+        if snapshot == 0xFFFFFFFF:
+            log.error("Can't create snap shot in function 'get_module_addr'")
+
+        current_entry.dwSize = sizeof(current_entry)
+
+        if not api.Module32First(snapshot, byref(current_entry)):
+            return -1
+
+        while True:
+            if (current_entry.szModule == name):
+                api.CloseHandle(snapshot)
+                return current_entry.modBaseAddr
+
+            if not api.Module32Next(snapshot, byref(current_entry)):
+                break
+        api.CloseHandle(snapshot)
 
     def _read_process_memory(self, address, length):
-        data = ""
+        data = b""
         read_buf = create_string_buffer(length)
         count = c_ulong(0)
-        _address = address
-        _length = length
-        try:
-            old_protect = self._virtual_protect(
-                _address, _length, PAGE_EXECUTE_READWRITE)
-        except:
-            pass
-
-        while length:
-            if not api.ReadProcessMemory(self._hproc, address, read_buf, length, byref(count)):
-                if not len(data):
-                    log.error("ReadProcessMemory fail")
-                else:
-                    return data
-
+        if not api.ReadProcessMemory(self._hproc, address, read_buf, length, byref(count)):
+            log.error("ReadProcessMemory fail")
+            return False
+        else:
             data += read_buf.raw
-            length -= count.value
-            address += count.value
-        try:
-            self._virtual_protect(_address, _length, old_protect)
-        except:
-            pass
-        return data
-
-    # def _read_process_memory(self, address, length):
-    #     data = b""
-    #     read_buf = create_string_buffer(length)
-    #     count = c_ulong(0)
-    #     if not api.ReadProcessMemory(self._hproc, address, read_buf, length, byref(count)):
-    #         log.error("ReadProcessMemory fail")
-    #         return False
-    #     else:
-    #         data += read_buf.raw
-    #         return data
+            return data
 
     def _write_process_memory(self, address, data):
         count = c_ulong(0)
@@ -240,7 +232,9 @@ if __name__ == "__main__":
     r = ReDbg(name="quite_easy.exe", debug=True)
 
     def handler(context: CONTEXT):
+        print(r._read_process_memory(context.Eax, 5))
         print(f"Eax:{context.Eax}")
 
-    r.add_handler(0x40AD39, handler)
+    baseaddr = r.get_module_addr(b"quite_easy.exe")
+    r.add_handler(baseaddr + 0xAD39, handler)
     r.debug()
