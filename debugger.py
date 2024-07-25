@@ -36,11 +36,6 @@ THREAD_ALL_ACCESS = 0x001F03FF
 CONTEXT_FULL = 0x00010007
 CONTEXT_DEBUG_REGISTERS = 0x00010010
 
-HW_ACCESS = 0x00000003
-HW_EXECUTE = 0x00000000
-HW_WRITE = 0x00000001
-
-
 class MODULEENTRY32(Structure):
     _fields_ = [
         ("dwSize",        DWORD),
@@ -53,38 +48,6 @@ class MODULEENTRY32(Structure):
         ("hModule",       PVOID),
         ("szModule",      CHAR * 256),
         ("szExePath",     CHAR * 260),
-    ]
-
-
-class STARTUPINFO(Structure):
-    _fields_ = [
-        ("cb", DWORD),
-        ("lpReserved", LPTSTR),
-        ("lpDesktop", LPTSTR),
-        ("lpTitle", LPTSTR),
-        ("dwX", DWORD),
-        ("dwY", DWORD),
-        ("dwXSize", DWORD),
-        ("dwYSize", DWORD),
-        ("dwXCountChars", DWORD),
-        ("dwYCountChars", DWORD),
-        ("dwFillAttribute", DWORD),
-        ("dwFlags", DWORD),
-        ("wShowWindow", WORD),
-        ("cbReserved2", WORD),
-        ("lpReserved2", LPTSTR),
-        ("hStdInput", HANDLE),
-        ("hStdOutput", HANDLE),
-        ("hStdError", HANDLE),
-    ]
-
-
-class PROCESS_INFORMATION(Structure):
-    _fields_ = [
-        ("hProcess", HANDLE),
-        ("hThread", HANDLE),
-        ("dwProcessId", DWORD),
-        ("dwThreadId", DWORD),
     ]
 
 
@@ -136,21 +99,6 @@ class THREADENTRY32(Structure):
         ("dwFlags", DWORD)
     ]
 
-
-class FLOATING_SAVE_AREA(Structure):
-    _fields_ = [
-        ("ControlWord", DWORD),
-        ("StatusWord", DWORD),
-        ("TagWord", DWORD),
-        ("ErrorOffset", DWORD),
-        ("ErrorSelector", DWORD),
-        ("DataOffset", DWORD),
-        ("DataSelector", DWORD),
-        ("RegisterArea", BYTE * 80),
-        ("Cr0NpxState", DWORD),
-    ]
-
-
 class CONTEXT(Structure):
     _fields_ = [
         ('P1Home', DWORD64),
@@ -163,13 +111,13 @@ class CONTEXT(Structure):
         ('ContextFlags', DWORD),
         ('MxCsr', DWORD),
 
-        ('SegCs',WORD),   
-        ('SegDs',WORD), 
-        ('SegEs',WORD), 
-        ('SegFs',WORD), 
-        ('SegGs',WORD), 
-        ('SegSs',WORD), 
-        ('EFlags',DWORD), 
+        ('SegCs', WORD),
+        ('SegDs', WORD),
+        ('SegEs', WORD),
+        ('SegFs', WORD),
+        ('SegGs', WORD),
+        ('SegSs', WORD),
+        ('EFlags', DWORD),
 
         ('Dr0', DWORD64),
         ('Dr1', DWORD64),
@@ -198,35 +146,6 @@ class CONTEXT(Structure):
     ]
 
 
-class PROC_STRUCT(Structure):
-    _fields_ = [
-        ("wProcessorArchitecture", WORD),
-        ("wReserved", WORD),
-    ]
-
-
-class SYSTEM_INFO_UNION(Union):
-    _fields_ = [
-        ("dsOemId", DWORD),
-        ("sProcStruc", PROC_STRUCT),
-    ]
-
-
-class SYSTEM_INFO(Structure):
-    _fields_ = [
-        ("uSysInfo", SYSTEM_INFO_UNION),
-        ("dwPageSize", DWORD),
-        ("lpMinimumApplicationAddress", LPVOID),
-        ("lpMaximumApplicationAddress", LPVOID),
-        ("dwActiveProcessMask", DWORD),
-        ("dwNumberOfProcessors", DWORD),
-        ("dwProcessorType", DWORD),
-        ("dwAllocationGranularity", DWORD),
-        ("wProcessorLevel", WORD),
-        ("wProcessorRevision", WORD),
-    ]
-
-
 class MEMORY_BASIC_INFORMATION(Structure):
     _fields_ = [('BaseAddress', c_void_p),
                 ('AllocationBase', c_void_p),
@@ -247,20 +166,6 @@ class MEMORY_BASIC_INFORMATION64(Structure):
                 ('Protect', DWORD),
                 ('Type', DWORD),
                 ('alignement2', DWORD)]
-
-
-class SYSTEM_INFO(Structure):
-    _fields_ = [('wProcessorArchitecture', WORD),
-                ('wReserved', WORD),
-                ('dwPageSize', DWORD),
-                ('lpMinimumApplicationAddress', LPVOID),
-                ('lpMaximumApplicationAddress', LPVOID),
-                ('dwActiveProcessorMask', c_ulonglong),
-                ('dwNumberOfProcessors', DWORD),
-                ('dwProcessorType', DWORD),
-                ('dwAllocationGranularity', DWORD),
-                ('wProcessorLevel', WORD),
-                ('wProcessorRevision', WORD)]
 
 
 PAGE_EXECUTE_READWRITE = 64
@@ -299,9 +204,10 @@ class WinApi:
         self.SetThreadContext = CDLL("kernel32.dll").SetThreadContext
         self.Module32First = CDLL("kernel32.dll").Module32First
         self.Module32Next = CDLL("kernel32.dll").Module32Next
+        self.TerminateProcess = CDLL("kernel32.dll").TerminateProcess
+        self.DebugActiveProcessStop = CDLL("kernel32.dll").DebugActiveProcessStop
 
 api = WinApi()
-
 
 class Log:
     def warning(self, msg):
@@ -397,7 +303,7 @@ class ReDbg:
             raise Exception("Can't get pid")
 
         self._hproc = self._open_process(self._pid)
-        self._attach()
+       
 
     def add_handler(self, addr, handler):
         org_byte = self._read_process_memory(addr, 1)
@@ -413,10 +319,14 @@ class ReDbg:
                 f"Can't set break point at {hex(addr)}. Error code {hex(api.GetLastError())}")
 
     def debug(self):
-        while self._get_debug_event():
-            pass
-        if (self._debug):
-                log.success("Debugger terminated")
+        self._attach()
+        while True:
+            if self._get_debug_event() == False:
+                break
+        api.DebugActiveProcessStop(self._hproc)    
+        api.TerminateProcess(self._hproc, 0)
+        api.CloseHandle(self._hproc)
+        log.info("Debugger terminated")
 
     def _open_process(self, pid):
         hproc = api.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
@@ -454,6 +364,7 @@ class ReDbg:
     def _get_debug_event(self):
         debug_event = DEBUG_EVENT()
         continue_status = DBG_CONTINUE
+        
         if (api.WaitForDebugEvent(byref(debug_event), INFINITE)):
             if (self._debug):
                 log.success("Event code: %d Thread ID: %d" % (
@@ -461,7 +372,7 @@ class ReDbg:
             if (debug_event.dwDebugEventCode == EXIT_PROCESS_DEBUG_EVENT):
                 return False
             if (debug_event.dwDebugEventCode == EXCEPTION_DEBUG_EVENT):
-                #exception = debug_event.u.Exception.ExceptionRecord.ExceptionCode
+                # exception = debug_event.u.Exception.ExceptionRecord.ExceptionCode
                 exception_address = debug_event.u.Exception.ExceptionRecord.ExceptionAddress
                 bp: BreakPoint = self._handlers.get(
                     exception_address, None)
@@ -470,19 +381,23 @@ class ReDbg:
                     context = self._get_thread_context(h_thread)
 
                     if (bp.handler is not None):
+                        log.info(
+                            f"The breakpoint will be processed at {hex(exception_address)}")
                         bp.handler(context)
                         self._write_process_memory(
                             bp.address, bp.original_byte)
                         context.Eip = context.Eip - 1
                         if (not api.SetThreadContext(h_thread, byref(context))):
                             raise Exception("SetThreadContext Error!")
-                    else:
-                        log.warning(
-                            f"This breakpoint does not have a handler.Address : {hex(exception_address)}")
+
                     api.CloseHandle(h_thread)
+                else:
+                    log.warning(
+                        f"This breakpoint does not have a handler.Address : {hex(exception_address)}")
             api.ContinueDebugEvent(
                 debug_event.dwProcessId, debug_event.dwThreadId, continue_status)
             return True
+        return False
 
     def get_module_addr(self, name: bytes):
         current_entry = MODULEENTRY32()
@@ -525,15 +440,3 @@ class ReDbg:
             return False
         else:
             return True
-
-
-if __name__ == "__main__":
-    r = ReDbg(name="quite_easy.exe", debug=True)
-
-    def handler(context: CONTEXT):
-        print(r._read_process_memory(context.Eax, 5))
-        print(f"Eax:{context.Eax}")
-
-    baseaddr = r.get_module_addr(b"quite_easy.exe")
-    r.add_handler(baseaddr + 0xAD39, handler)
-    r.debug()
