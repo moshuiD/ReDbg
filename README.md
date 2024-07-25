@@ -1,5 +1,6 @@
 # ReDbg
-an easy debugger for CTF
+an easy debugger for CTF  
+[Blog](https://www.moshui.eu.org/2024/07/25/ReDbg/)
 # Function
 **Can easily achieve automated debugging of Windows programs**  
 
