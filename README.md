@@ -4,12 +4,12 @@ an easy debugger for CTF
 **Can easily achieve automated debugging of Windows programs**  
 
 **We provide two interfaces: C++ and Python**
-## C++
+## C++ *(Stable and efficient)*
 We provide two classes, one for controlling processes and the other for debugging  
 
 Developed using Visual Studio.Using **C++17** standard and **multi byte character** set and using define to switch registers between x64 and x32 (Eip/Rip)  
 
-They can easily debug x64 and x32 programs  
+They can easily debug x64 and x32 programs   
 
 Here is a simple example:  
 ```cpp
@@ -31,7 +31,7 @@ int main() {
 	}
 }
 ```
-## Python
+## Python *(Generally stable)*
 We provide a **ReDbg** class to accomplish debugging functionality.    
 
 We can use **Python3 (x64)** to debug **Win (x86) exe**  

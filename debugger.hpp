@@ -8,6 +8,8 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <vector>
+#include <algorithm>
 namespace ReDbg
 {
 #ifdef _WIN64
@@ -23,6 +25,7 @@ namespace ReDbg
 	using std::function;
 	using std::map;
 	using std::mutex;
+	using std::vector;
 
 	class Process
 	{
@@ -170,15 +173,20 @@ namespace ReDbg
 			return *(buf);
 		}
 
-		template<>
-		inline string Read<string>(uintptr_t addr, size_t length) {
-			std::unique_ptr<char[]> buf = std::make_unique<char[]>(length + 1);
+		template<class T>
+		inline vector<T> ReadArray(uintptr_t addr, size_t length) {
+			unique_ptr<T[]> buf = std::make_unique<T[]>(length + 1);
 			SIZE_T readCount = 0;
 			if (ReadProcessMemory(m_hProc, reinterpret_cast<LPCVOID>(addr), buf.get(), length, &readCount)) {
-				buf[length] = '\0';
-				return string(buf.get());
+				vector<T> vec{};
+				vec.reserve(readCount / sizeof(T));
+				for (size_t i = 0; i < readCount / sizeof(T); i++) {
+					vec.push_back(buf[i]);
+				}
+				return vec;
 			}
 		}
+		
 		template<class T>
 		inline bool Write(uintptr_t addr, T buf, size_t length = sizeof(T)) {
 			SIZE_T writeCount = 0;
