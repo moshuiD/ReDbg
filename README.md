@@ -3,11 +3,11 @@ an easy debugger for CTF
 # Function
 **Can easily achieve automated debugging of Windows programs**  
 
-**We provide two interfaces: C++ and Python**
+**We provide two interfaces: C++(have trace mode) and Python**
 ## C++ *(Stable and efficient)*
 We provide two classes, one for controlling processes and the other for debugging  
 
-Developed using Visual Studio.Using **C++17** standard and **multi byte character** set and using define to switch registers between x64 and x32 (Eip/Rip)  
+Developed using Visual Studio.Using **Zydis** , **C++20** standard and **multi byte character** set and using define to switch registers between x64 and x32 (Eip/Rip)  
 
 They can easily debug x64 and x32 programs   
 
@@ -31,6 +31,10 @@ int main() {
 	}
 }
 ```
+### Trace
+now I append trace method in this.
+![image.png](https://s2.loli.net/2025/01/12/CJSXAo95OP4FU2Z.png)
+**we can easy to trace Windows32/64 process!**
 ## Python *(Generally stable)*
 We provide a **ReDbg** class to accomplish debugging functionality.    
 
